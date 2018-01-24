@@ -20,6 +20,7 @@ extern "C" {
     #include "shavite3.h"
     #include "cryptonight.h"
     #include "x13.h"
+    #include "x16r.h"
     #include "nist5.h"
     #include "sha1.h",
     #include "x15.h"
@@ -420,6 +421,26 @@ NAN_METHOD(x13) {
     info.GetReturnValue().Set(dest.ToLocalChecked());
 }
 
+NAN_METHOD(x16r) {
+    if (info.Length() < 1)
+        return except("You must provide one argument.");
+
+    Local<Object> target = info[0]->ToObject();
+
+    if(!node::Buffer::HasInstance(target))
+        return except("Argument should be a buffer object.");
+
+    char * input = node::Buffer::Data(target);
+    Nan::MaybeLocal<v8::Object> dest = Nan::NewBuffer(32);
+    char* output = node::Buffer::Data(dest.ToLocalChecked());
+
+    uint32_t input_len = node::Buffer::Length(target);
+
+    x16r_hash(input, output, input_len);
+
+    info.GetReturnValue().Set(dest.ToLocalChecked());
+}
+
 NAN_METHOD(boolberry) {
     if (info.Length() < 2)
         return except("You must provide two arguments.");
@@ -568,6 +589,8 @@ NAN_MODULE_INIT(Init) {
         GetFunction(New<FunctionTemplate>(cryptonight)).ToLocalChecked());
     Nan::Set(target, New<String>("x13").ToLocalChecked(),
         GetFunction(New<FunctionTemplate>(x13)).ToLocalChecked());
+    Nan::Set(target, New<String>("x16r").ToLocalChecked(),
+        GetFunction(New<FunctionTemplate>(x16r)).ToLocalChecked());
     Nan::Set(target, New<String>("boolberry").ToLocalChecked(),
         GetFunction(New<FunctionTemplate>(boolberry)).ToLocalChecked());
     Nan::Set(target, New<String>("nist5").ToLocalChecked(),
