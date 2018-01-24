@@ -26,6 +26,7 @@
                 "nist5.c",
                 "sha1.c",
                 "x15.c",
+				"x16r.c",
                 "fresh.c",
                 "s3.c",
                 "neoscrypt.c",
