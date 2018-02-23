@@ -29,8 +29,8 @@
  *
  * ===========================(LICENSE END)=============================
  *
- * @file    sph_gost.h
- * @author  ivan <ivansib@users.noreply.github.com>
+ * @file     sph_gost.h
+ * @author   Mish <mish@btchouse.com>
  */
 
 #ifndef SPH_GOST_H__

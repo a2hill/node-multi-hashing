@@ -32,6 +32,10 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#define inline __inline
+#endif
+
 #include "sph_hefty1.h"
 
 #define Min(A, B) (A <= B ? A : B)
@@ -62,7 +66,7 @@
     }                                                                   \
 
 /* Nothing up my sleeve constants */
-static const uint32_t K[64] = {
+const static uint32_t K[64] = {
     0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL,
     0x3956c25bUL, 0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL,
     0xd807aa98UL, 0x12835b01UL, 0x243185beUL, 0x550c7dc3UL,
@@ -82,7 +86,7 @@ static const uint32_t K[64] = {
 };
 
 /* Initial hash values */
-static const uint32_t H[HEFTY1_STATE_WORDS] = {
+const static uint32_t H[HEFTY1_STATE_WORDS] = {
     0x6a09e667UL,
     0xbb67ae85UL,
     0x3c6ef372UL,
@@ -317,8 +321,8 @@ void HEFTY1_Update(HEFTY1_CTX *ctx, const void *buf, size_t len)
 
     uint64_t read = 0;
     while (len) {
-        uint64_t end = ctx->written % HEFTY1_BLOCK_BYTES;
-        uint64_t count = Min(len, HEFTY1_BLOCK_BYTES - end);
+        size_t end = (size_t)(ctx->written % HEFTY1_BLOCK_BYTES);
+        size_t count = Min(len, HEFTY1_BLOCK_BYTES - end);
         memcpy(&ctx->block[end], &((unsigned char *)buf)[read], count);
         len -= count;
         read += count;
@@ -334,7 +338,7 @@ void HEFTY1_Final(unsigned char *digest, HEFTY1_CTX *ctx)
     assert(ctx);
 
     /* Pad message (FIPS 180 Section 5.1.1) */
-    uint64_t used = ctx->written % HEFTY1_BLOCK_BYTES;
+    size_t used = (size_t)(ctx->written % HEFTY1_BLOCK_BYTES);
     ctx->block[used++] = 0x80; /* Append 1 to end of message */
     if (used > HEFTY1_BLOCK_BYTES - 8) {
         /* We have already written into the last 64bits, so

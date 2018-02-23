@@ -28,25 +28,66 @@
  * ---------------------------------------------------------------------------
  */
 static const char _NR[] = {
-	0x4e,0x61,0x62,0x69,0x6c,0x20,0x53,0x2e,0x20,
-	0x41,0x6c,0x20,0x52,0x61,0x6d,0x6c,0x69,0x00 };
+  0x4e,0x61,0x62,0x69,0x6c,0x20,0x53,0x2e,0x20,
+  0x41,0x6c,0x20,0x52,0x61,0x6d,0x6c,0x69,0x00
+};
+
+#include <sys/types.h>
+#define NO_OLDNAMES /* timeb is still defined in mingw */
+
+#include "miner.h"
 
 #include <stddef.h>
-#include <time.h> 
-#include <sys/timeb.h>
+#include <time.h>
 
-#ifdef __APPLE__
-#include <malloc/malloc.h>
-#else
-#include <malloc.h>
+// Only used by ftime, which was removed from POSIX 2008.
+struct timeb {
+  time_t          time;
+  unsigned short  millitm;
+  short           timezone;
+  short           dstflag;
+};
+
+#ifdef _MSC_VER
+struct timezone {
+  int  tz_minuteswest; /* minutes W of Greenwich */
+  int  tz_dsttime;     /* type of dst correction */
+};
 #endif
 
+// This was removed from POSIX 2008.
+static int ftime(struct timeb* tb) {
+  struct timeval  tv;
+  struct timezone tz;
+
+  if (gettimeofday(&tv, &tz) < 0)
+    return -1;
+
+  tb->time    = tv.tv_sec;
+  tb->millitm = (unsigned short) ((tv.tv_usec + 500) / 1000);
+
+  if (tb->millitm == 1000) {
+    ++tb->time;
+    tb->millitm = 0;
+  }
+
+  tb->timezone = tz.tz_minuteswest;
+  tb->dstflag  = tz.tz_dsttime;
+
+  return 0;
+}
+
+
+#if !((defined(__FreeBSD__) && __FreeBSD__ >= 10) || defined(__APPLE__))
+#include <malloc.h>
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 #ifdef WIN32
 #include <process.h>
+#define getpid _getpid
 #else
 #include <sys/types.h>
 #include <unistd.h>
@@ -242,13 +283,11 @@ static OAES_RET oaes_sub_byte( uint8_t * byte )
 {
 	size_t _x, _y;
 	
-	if( NULL == byte )
+	if( unlikely(NULL == byte) )
 		return OAES_RET_ARG1;
 
-	_x = _y = *byte;
+	_y = ((_x = *byte) >> 4) & 0x0f;
 	_x &= 0x0f;
-	_y &= 0xf0;
-	_y >>= 4;
 	*byte = oaes_sub_byte_value[_y][_x];
 	
 	return OAES_RET_SUCCESS;
@@ -300,29 +339,24 @@ static OAES_RET oaes_word_rot_left( uint8_t word[OAES_COL_LEN] )
 
 static OAES_RET oaes_shift_rows( uint8_t block[OAES_BLOCK_SIZE] )
 {
-	uint8_t _temp[OAES_BLOCK_SIZE];
-
-	if( NULL == block )
+	if( unlikely(NULL == block) )
 		return OAES_RET_ARG1;
 
-	_temp[0x00] = block[0x00];
-	_temp[0x01] = block[0x05];
-	_temp[0x02] = block[0x0a];
-	_temp[0x03] = block[0x0f];
-	_temp[0x04] = block[0x04];
-	_temp[0x05] = block[0x09];
-	_temp[0x06] = block[0x0e];
-	_temp[0x07] = block[0x03];
-	_temp[0x08] = block[0x08];
-	_temp[0x09] = block[0x0d];
-	_temp[0x0a] = block[0x02];
-	_temp[0x0b] = block[0x07];
-	_temp[0x0c] = block[0x0c];
-	_temp[0x0d] = block[0x01];
-	_temp[0x0e] = block[0x06];
-	_temp[0x0f] = block[0x0b];
-	memcpy( block, _temp, OAES_BLOCK_SIZE );
-	
+	uint8_t _temp[] = { block[0x03], block[0x02], block[0x01], block[0x06], block[0x0b] };
+
+	block[0x0b] = block[0x07];
+	block[0x01] = block[0x05];
+	block[0x02] = block[0x0a];
+	block[0x03] = block[0x0f];
+	block[0x05] = block[0x09];
+	block[0x06] = block[0x0e];
+	block[0x07] = _temp[0];
+	block[0x09] = block[0x0d];
+	block[0x0a] = _temp[1];
+	block[0x0d] = _temp[2];
+	block[0x0e] = _temp[3];
+	block[0x0f] = _temp[4];
+
 	return OAES_RET_SUCCESS;
 }
 
@@ -357,11 +391,9 @@ static OAES_RET oaes_inv_shift_rows( uint8_t block[OAES_BLOCK_SIZE] )
 static uint8_t oaes_gf_mul(uint8_t left, uint8_t right)
 {
 	size_t _x, _y;
-	
-	_x = _y = left;
+
+	_y = ((_x = left) >> 4) & 0x0f;
 	_x &= 0x0f;
-	_y &= 0xf0;
-	_y >>= 4;
 	
 	switch( right )
 	{
@@ -393,7 +425,7 @@ static OAES_RET oaes_mix_cols( uint8_t word[OAES_COL_LEN] )
 {
 	uint8_t _temp[OAES_COL_LEN];
 
-	if( NULL == word )
+	if( unlikely(NULL == word) )
 		return OAES_RET_ARG1;
 	
 	_temp[0] = oaes_gf_mul(word[0], 0x02) ^ oaes_gf_mul( word[1], 0x03 ) ^
@@ -494,7 +526,7 @@ static uint32_t oaes_get_seed(void)
 	_test = (char *) calloc( sizeof( char ), timer.millitm );
 	_ret = gmTimer->tm_year + 1900 + gmTimer->tm_mon + 1 + gmTimer->tm_mday +
 			gmTimer->tm_hour + gmTimer->tm_min + gmTimer->tm_sec + timer.millitm +
-			(uintptr_t) ( _test + timer.millitm ) + getpid();
+			(uint32_t) ( _test + timer.millitm ) + getpid();
 
 	if( _test )
 		free( _test );
@@ -535,21 +567,12 @@ static OAES_RET oaes_key_expand( OAES_CTX * ctx )
 	size_t _i, _j;
 	oaes_ctx * _ctx = (oaes_ctx *) ctx;
 	
-	if( NULL == _ctx )
-		return OAES_RET_ARG1;
-	
-	if( NULL == _ctx->key )
-		return OAES_RET_NOKEY;
-	
 	_ctx->key->key_base = _ctx->key->data_len / OAES_RKEY_LEN;
 	_ctx->key->num_keys =  _ctx->key->key_base + OAES_ROUND_BASE;
 					
 	_ctx->key->exp_data_len = _ctx->key->num_keys * OAES_RKEY_LEN * OAES_COL_LEN;
 	_ctx->key->exp_data = (uint8_t *)
 			calloc( _ctx->key->exp_data_len, sizeof( uint8_t ));
-	
-	if( NULL == _ctx->key->exp_data )
-		return OAES_RET_MEM;
 	
 	// the first _ctx->key->data_len are a direct copy
 	memcpy( _ctx->key->exp_data, _ctx->key->data, _ctx->key->data_len );
@@ -675,7 +698,7 @@ OAES_RET oaes_key_export( OAES_CTX * ctx,
 	// header
 	memcpy( data, oaes_header, OAES_BLOCK_SIZE );
 	data[5] = 0x01;
-	data[7] = _ctx->key->data_len;
+	data[7] = (uint8_t) _ctx->key->data_len;
 	memcpy( data + OAES_BLOCK_SIZE, _ctx->key->data, _ctx->key->data_len );
 	
 	return OAES_RET_SUCCESS;
@@ -804,50 +827,18 @@ OAES_RET oaes_key_import_data( OAES_CTX * ctx,
 		const uint8_t * data, size_t data_len )
 {
 	oaes_ctx * _ctx = (oaes_ctx *) ctx;
-	OAES_RET _rc = OAES_RET_SUCCESS;
-	
-	if( NULL == _ctx )
-		return OAES_RET_ARG1;
-	
-	if( NULL == data )
-		return OAES_RET_ARG2;
-	
-	switch( data_len )
-	{
-		case 16:
-		case 24:
-		case 32:
-			break;
-		default:
-			return OAES_RET_ARG3;
-	}
 	
 	if( _ctx->key )
 		oaes_key_destroy( &(_ctx->key) );
 	
 	_ctx->key = (oaes_key *) calloc( sizeof( oaes_key ), 1 );
 	
-	if( NULL == _ctx->key )
-		return OAES_RET_MEM;
-	
 	_ctx->key->data_len = data_len;
 	_ctx->key->data = (uint8_t *)
 			calloc( data_len, sizeof( uint8_t ));
-	
-	if( NULL == _ctx->key->data )
-	{
-		oaes_key_destroy( &(_ctx->key) );
-		return OAES_RET_MEM;
-	}
 
 	memcpy( _ctx->key->data, data, data_len );
-	_rc = _rc || oaes_key_expand( ctx );
-	
-	if( _rc != OAES_RET_SUCCESS )
-	{
-		oaes_key_destroy( &(_ctx->key) );
-		return _rc;
-	}
+	oaes_key_expand( ctx );
 	
 	return OAES_RET_SUCCESS;
 }
@@ -1268,7 +1259,7 @@ OAES_RET oaes_encrypt( OAES_CTX * ctx,
 		
 		// insert pad
 		for( _j = 0; _j < OAES_BLOCK_SIZE - _block_size; _j++ )
-			_block[ _block_size + _j ] = _j + 1;
+			_block[_block_size + _j] = (uint8_t)_j + 1;
 	
 		// CBC
 		if( _ctx->options & OAES_OPTION_CBC )
@@ -1419,10 +1410,10 @@ OAES_API OAES_RET oaes_encryption_round( const uint8_t * key, uint8_t * c )
 {
   size_t _i;
 
-  if( NULL == key )
+  if( unlikely(NULL == key) )
     return OAES_RET_ARG1;
 
-  if( NULL == c )
+  if( unlikely(NULL == c) )
     return OAES_RET_ARG2;
 
   // SubBytes(state)
@@ -1450,13 +1441,13 @@ OAES_API OAES_RET oaes_pseudo_encrypt_ecb( OAES_CTX * ctx, uint8_t * c )
   size_t _i;
   oaes_ctx * _ctx = (oaes_ctx *) ctx;
 
-  if( NULL == _ctx )
+  if( unlikely(NULL == _ctx) )
     return OAES_RET_ARG1;
 
-  if( NULL == c )
+  if( unlikely(NULL == c) )
     return OAES_RET_ARG2;
 
-  if( NULL == _ctx->key )
+  if( unlikely(NULL == _ctx->key) )
     return OAES_RET_NOKEY;
 
   for ( _i = 0; _i < 10; ++_i )

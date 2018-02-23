@@ -3,33 +3,32 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
+#ifndef INT_UTILS_H_
+#define INT_UTILS_H_
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#ifndef _MSC_VER
 #include <sys/param.h>
-
-/*
- * Create GNU compatible endian macros. We use the values for __LITTLE_ENDIAN
- * and __BIG_ENDIAN based on endian.h.
- */
-#ifdef __sun
-#include <sys/byteorder.h>
-#define LITTLE_ENDIAN   1234
-#define BIG_ENDIAN      4321
-#ifdef _LITTLE_ENDIAN
-#define BYTE_ORDER      LITTLE_ENDIAN
 #else
-#define BYTE_ORDER      BIG_ENDIAN
-#endif /* _LITTLE_ENDIAN */
-#endif /* __sun */
+#define inline __inline
+#endif
 
-#if defined(_MSC_VER)
+#ifndef LITTLE_ENDIAN
+#define LITTLE_ENDIAN 0x1234
+#define BIG_ENDIAN 0x4321
+#endif
+
+#if !defined(BYTE_ORDER) && (defined(__LITTLE_ENDIAN__) || defined(__arm__) || defined(WIN32))
+#define BYTE_ORDER LITTLE_ENDIAN
+#endif
+
+#if defined(WIN32)
 #include <stdlib.h>
 
 static inline uint32_t rol32(uint32_t x, int r) {
-  static_assert(sizeof(uint32_t) == sizeof(unsigned int), "this code assumes 32-bit integers");
   return _rotl(x, r);
 }
 
@@ -55,32 +54,6 @@ static inline uint64_t hi_dword(uint64_t val) {
 
 static inline uint64_t lo_dword(uint64_t val) {
   return val & 0xFFFFFFFF;
-}
-
-static inline uint64_t mul128(uint64_t multiplier, uint64_t multiplicand, uint64_t* product_hi) {
-  // multiplier   = ab = a * 2^32 + b
-  // multiplicand = cd = c * 2^32 + d
-  // ab * cd = a * c * 2^64 + (a * d + b * c) * 2^32 + b * d
-  uint64_t a = hi_dword(multiplier);
-  uint64_t b = lo_dword(multiplier);
-  uint64_t c = hi_dword(multiplicand);
-  uint64_t d = lo_dword(multiplicand);
-
-  uint64_t ac = a * c;
-  uint64_t ad = a * d;
-  uint64_t bc = b * c;
-  uint64_t bd = b * d;
-
-  uint64_t adbc = ad + bc;
-  uint64_t adbc_carry = adbc < ad ? 1 : 0;
-
-  // multiplier * multiplicand = product_hi * 2^64 + product_lo
-  uint64_t product_lo = bd + (adbc << 32);
-  uint64_t product_lo_carry = product_lo < bd ? 1 : 0;
-  *product_hi = ac + (adbc >> 32) + (adbc_carry << 32) + product_lo_carry;
-  assert(ac <= *product_hi);
-
-  return product_lo;
 }
 
 static inline uint64_t div_with_reminder(uint64_t dividend, uint32_t divisor, uint32_t* remainder) {
@@ -178,11 +151,7 @@ static inline void memcpy_swap64(void *dst, const void *src, size_t n) {
 }
 
 #if !defined(BYTE_ORDER) || !defined(LITTLE_ENDIAN) || !defined(BIG_ENDIAN)
-#if __STDC_VERSION__ - 0 >= 201112L
 static_assert(false, "BYTE_ORDER is undefined. Perhaps, GNU extensions are not enabled");
-#else
-#error "BYTE_ORDER is undefined. Perhaps, GNU extensions are not enabled"
-#endif
 #endif
 
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -222,3 +191,5 @@ static_assert(false, "BYTE_ORDER is undefined. Perhaps, GNU extensions are not e
 #define memcpy_swap64be memcpy_ident64
 #define memcpy_swap64le memcpy_swap64
 #endif
+
+#endif /* INT_UTILS_H_ */

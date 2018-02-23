@@ -110,7 +110,7 @@ HashReturn jh_hash(int hashbitlen, const BitSequence *data,DataLength databitlen
 /*swapping bits 32i||32i+1||......||32i+15 with bits 32i+16||32i+17||......||32i+31 of 64-bit x*/
 #define SWAP16(x)  (x) = ((((x) & 0x0000ffff0000ffffULL) << 16) | (((x) & 0xffff0000ffff0000ULL) >> 16));
 /*swapping bits 64i||64i+1||......||64i+31 with bits 64i+32||64i+33||......||64i+63 of 64-bit x*/
-#define SWAP32_JH(x)  (x) = (((x) << 32) | ((x) >> 32));
+#define SWAP32(x)  (x) = (((x) << 32) | ((x) >> 32));
 
 /*The MDS transform*/
 #define L(m0,m1,m2,m3,m4,m5,m6,m7) \
@@ -194,7 +194,7 @@ static void E8(hashState *state)
             for (i = 0; i < 2; i++) {
                   SS(state->x[0][i],state->x[2][i],state->x[4][i],state->x[6][i],state->x[1][i],state->x[3][i],state->x[5][i],state->x[7][i],((uint64*)E8_bitslice_roundconstant[roundnumber+5])[i],((uint64*)E8_bitslice_roundconstant[roundnumber+5])[i+2] );
                   L(state->x[0][i],state->x[2][i],state->x[4][i],state->x[6][i],state->x[1][i],state->x[3][i],state->x[5][i],state->x[7][i]);
-                  SWAP32_JH(state->x[1][i]); SWAP32_JH(state->x[3][i]); SWAP32_JH(state->x[5][i]); SWAP32_JH(state->x[7][i]);
+                  SWAP32(state->x[1][i]); SWAP32(state->x[3][i]); SWAP32(state->x[5][i]); SWAP32(state->x[7][i]);
             }
 
             /*round 7*roundnumber+6: Sbox and MDS layers*/
@@ -260,17 +260,16 @@ static HashReturn Update(hashState *state, const BitSequence *data, DataLength d
 
       /*There is data in the buffer, but the incoming data is insufficient for a full block*/
       if ( (state->datasize_in_buffer > 0 ) && (( state->datasize_in_buffer + databitlen) < 512)  ) {
-            if ( (databitlen & 7) == 0 ) {
-                 memcpy(state->buffer + (state->datasize_in_buffer >> 3), data, 64-(state->datasize_in_buffer >> 3)) ;
-		    }
-            else memcpy(state->buffer + (state->datasize_in_buffer >> 3), data, 64-(state->datasize_in_buffer >> 3)+1) ;
+            if ( (databitlen & 7) == 0 )
+                 memcpy(state->buffer + (state->datasize_in_buffer >> 3), data, (size_t) (64-(state->datasize_in_buffer >> 3)) );
+            else memcpy(state->buffer + (state->datasize_in_buffer >> 3), data, (size_t) (64 - (state->datasize_in_buffer >> 3) + 1) );
             state->datasize_in_buffer += databitlen;
             databitlen = 0;
       }
 
       /*There is data in the buffer, and the incoming data is sufficient for a full block*/
       if ( (state->datasize_in_buffer > 0 ) && (( state->datasize_in_buffer + databitlen) >= 512)  ) {
-	        memcpy( state->buffer + (state->datasize_in_buffer >> 3), data, 64-(state->datasize_in_buffer >> 3) ) ;
+	        memcpy(state->buffer + (state->datasize_in_buffer >> 3), data, (size_t) (64-(state->datasize_in_buffer >> 3)) );
 	        index = 64-(state->datasize_in_buffer >> 3);
 	        databitlen = databitlen - (512 - state->datasize_in_buffer);
 	        F8(state);

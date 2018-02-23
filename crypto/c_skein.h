@@ -28,7 +28,6 @@
 **
 ***************************************************************************/
 #include "skein_port.h"                      /* get platform-specific definitions */
-#include "hash.h"
 
 typedef enum
 {
@@ -38,8 +37,11 @@ typedef enum
 }
 SkeinHashReturn;
 
+typedef size_t   SkeinDataLength;                /* bit count  type */
+typedef u08b_t   SkeinBitSequence;               /* bit stream type */
+
 /* "all-in-one" call */
-SkeinHashReturn c_skein_hash(int hashbitlen,   const BitSequence *data,
-        DataLength databitlen, BitSequence *hashval);
+SkeinHashReturn skein_hash(int hashbitlen,   const SkeinBitSequence *data,
+        SkeinDataLength databitlen, SkeinBitSequence *hashval);
 
 #endif  /* ifndef _SKEIN_H_ */

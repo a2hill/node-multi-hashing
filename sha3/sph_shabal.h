@@ -38,7 +38,6 @@
 
 #include <stddef.h>
 #include "sph_types.h"
-
 #ifdef __cplusplus
 extern "C"{
 #endif
