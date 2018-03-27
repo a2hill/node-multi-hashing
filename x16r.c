@@ -41,21 +41,40 @@ enum Algo {
 	HASH_FUNC_COUNT
 };
 
-static void getAlgoString(const uint8_t* prevblock, char *output)
+static void getAlgoString(const uint32_t* prevblock, char *output)
 {
-	char *sptr = output;
+    uint8_t* data = (uint8_t*)prevblock;
 
-	for (int j = 0; j < HASH_FUNC_COUNT; j++) {
-		char b = (15 - j) >> 1; // 16 ascii hex chars, reversed
-		uint8_t algoDigit = (j & 1) ? prevblock[b] & 0xF : prevblock[b] >> 4;
-		if (algoDigit >= 10)
-			sprintf(sptr, "%c", 'A' + (algoDigit - 10));
-		else
-			sprintf(sptr, "%u", (uint32_t) algoDigit);
-		sptr++;
-	}
-	*sptr = '\0';
+    strcpy(output, "0123456789ABCDEF");
+
+    for(int i = 0; i < 16; i++){
+         uint8_t b = (15 - i) >> 1; // 16 ascii hex chars, reversed
+         uint8_t algoDigit = (i & 1) ? data[b] & 0xF : data[b] >> 4;
+        int offset = algoDigit;
+        // insert the nth character at the front
+        char oldVal = output[offset];
+        for(int j=offset; j-->0;){
+            output[j+1] = output[j];
+        }
+        output[0] = oldVal;
+    }
 }
+
+//static void getAlgoString(const uint8_t* prevblock, char *output)
+//{
+//	char *sptr = output;
+//
+//	for (int j = 0; j < HASH_FUNC_COUNT; j++) {
+//		char b = (15 - j) >> 1; // 16 ascii hex chars, reversed
+//		uint8_t algoDigit = (j & 1) ? prevblock[b] & 0xF : prevblock[b] >> 4;
+//		if (algoDigit >= 10)
+//			sprintf(sptr, "%c", 'A' + (algoDigit - 10));
+//		else
+//			sprintf(sptr, "%u", (uint32_t) algoDigit);
+//		sptr++;
+//	}
+//	*sptr = '\0';
+//}
 
 void x16r_hash(const char* input, char* output, uint32_t len)
 {
